@@ -1,0 +1,263 @@
+---
+title: "Análisis de Datos Ómicos - PEC1: Informe"
+author: "Elisa Fuentes"
+date: "2024-11-01"
+output: pdf_document
+
+---
+
+### Tabla de contenidos
+
+-   Abstract............................................................pág. 1
+
+-   Objetivos del estudio...............................................pág. 2
+
+-   Materiales y métodos................................................pág. 2
+
+-   Resultados..........................................................pág. 7
+
+-   Discusión y limitaciones y conclusiones del estudio.................pág. 16
+
+-   Referencias ........................................................pág. 17
+
+-   Enlace al repositorio de Github ....................................pág. 17
+
+### Abstract
+
+El síndrome caquéctico está relacionado con un deterioro funcional del paciente que caracteriza a muchas patologías entre las que se incluyen el cáncer. Hemos explorado los datos disponibles de niveles de 63 metabolitos diferentes tomados a 77 pacientes con cáncer, de los que disponemos la información de si padecen o no síndrome caquéctico. El objetivo del análisis es entender si existen patrones metabólicos que diferencian los pacientes con síndrome caquéxico de los que no lo padecen. Hemos observado tendencias a patrones diferenciados en los niveles de los metabolitos explorados entre los pacientes que sufren caquexia de los que no. Para poder concluir y determinar de manera correcta cuáles son dichos patrones, hace falta un análisis de los datos más profundo.
+
+\newpage
+
+### Objetivos
+
+El objetivo del análisis es explorar los datos de que disponemos para entender si existen patrones metabólicos que diferencian los pacientes con síndrome caquéxico de los que no lo padecen.
+
+
+### Materiales y métodos
+
+Para realizar el estudio hemos utilizado la base de datos *human_cachexia.csv,* obtenidos de Github. Los datos con los que trabajamos son utilizados en varios tutoriales de MetaboAnalyst. Dicha base de datos contiene los contajes contra diferentes metabolitos y una variable de clasificación en dos grupos según los pacientes tienen caquexia o son pacientes control.
+
+Además hemos creado un repositorio en Github para almacenar todos los datos del estudio y el código utilizado para explorar los datos, de manera que otras personas puedas reproducir el estudio. Además, para la exploración de los datos en R, hemos creado un objeto de tipo *SummarizedExperiment*. Finalmente, hemos explorado los datos. A continuación se detalla el proceso seguido para realizar dichas acciones.
+
+1.  **Descarga de datos**
+
+    Hemos descargado la base de datos *human_cachexia.csv,* encontrada dentro de la carpeta *2024-Cachexia* del repositorio de github <https://github.com/nutrimetabolomics/metaboData/>.
+
+2.  **Creación del repositorio**
+
+    Hemos creado un repositorio en Github llamado Fuentes_Raventós_Elisa_PEC1, donde hemos almacenado este informe, los datos y metadatos y el código de R generado para explorar los datos. Una vez creado, hemos copiado el link del repositorio de Github:
+
+    ![Pantalla del repositorio creado en Github](images/Captura%20de%20pantalla%202024-11-01%20122906.jpg)
+
+    Hemos empezado un nuevo proyecto en R con control de versiones vinculado al repositorio que hemos creado (File \> New Project \> Version Control \> Git):
+
+    ![](images/Captura%20de%20pantalla%202024-11-01%20123316.jpg){width="316"}
+
+3.  **Carga del dataset a R:**
+
+    ```{r, echo=TRUE, warning=FALSE}
+    # Cargamos dataset
+    human_cachexia <- read.csv("C:/Users/efuen/OneDrive/Escritorio/UOC/Semestre 3/Datos ómicos/human_cachexia.csv", row.names=1, stringsAsFactors=TRUE)
+    ```
+
+4.  **Creación de un contenedor del tipo *SummarizedExperiment* y pre-procesamiento de los datos:**
+
+    Para trabajar con un conjunto de datos ómicos, lo mejor es utilizar un objeto de tipo *SummarizedExperiment*, de Bioconductor. Este objeto nos permite almacenar los datos y los metadatos de manera conjunto y acceder a cada tipo de los datos cuando nos interese.
+
+    Antes de crear el objeto, hemos observado la estructura de la base de datos que tenemos, para saber si nos conviene manipularla.
+
+    ```{r, echo=TRUE, warning=FALSE, message=FALSE}
+    # Cargamos la librería necesaria de Bioconductor
+    library(SummarizedExperiment)
+
+    # Observamos la estructura de nuestros datos
+    str(human_cachexia)
+
+    ```
+
+    Tenemos una base de datos de 77 pacientes de los cuales se han tomado los valores de 63 metabolitos. Además, tenemos una variable que nos indica si el paciente sufre del síndrome de caquexia o no (control). Dado que nuestro conjunto de datos no contiene valores ausentes (NA), no hemos necesitado lidiar con ellos ni hacer ningún tipo de imputación. Sin embargo, sí los hemos normalizado. Para ello, igual que para el resto de análisis, hemos utilizado el workflow *POMA* y las funciones de dicho paquete. El método de normalización elegido ha sigo "log pareto", que reduce el impacto de valores extremos, pero mantiene cierta sensibilidad a la variabilidad natural.
+
+    ```{r, echo=TRUE, warning=FALSE, fig.width=12, fig.height=8}
+    # Trasponemos la matriz para tener los datos dispuestos de tal manera que cada columna sea una muestra
+    datos_met <- t(as.matrix(human_cachexia)[,2:64])
+    variables <- rownames(datos_met)
+    datos_met <- apply(datos_met, 2, as.numeric)
+    rownames(datos_met) <- variables
+
+    samples <- as.matrix(t(as.matrix(human_cachexia))[1,])
+
+    colnames(samples)[1] <- "Group" 
+
+    features <- as.matrix(rownames(datos_met))
+    colnames(features) <- "features"
+
+    se <- SummarizedExperiment(
+        assays = list(counts = datos_met),
+        rowData = features,
+        colData = samples
+    )
+
+    se
+
+    # Normalización del conjunto de datos
+    # Cargamos los paquetes
+    library(POMA)
+
+    senorm <- se %>% 
+      PomaNorm(method = "log_pareto")
+
+    senorm
+
+    # Representamos diagramas de cajas 
+    PomaBoxplots(senorm)
+
+    ```
+
+    En la figura podemos ver la distribución de los valores para cada una de las muestras. Los extremos inferior y superior de la caja representa el rango intercuartil (Q1 y Q3, respectivamente) y la línea horizontal la mediana (Q2) de los datos. Las líneas verticales el rango donde residen todos los valores no-outliers y los puntos son los valores considerados outliers.
+
+5.  **Análisis explorativo**
+
+    Para el análisis explorativo de los datos, hemos hecho una descripción de los datos y realizado realizado un correlograma, por el método de Pearson, entre los niveles de metabolitos. También hemos observado los niveles de los diferentes metabolitos en cada uno de los pacientes en un mapa de color, culsterizando por muestras y metabolitos para ver la estructura de agrupación y si existen patrones diferenciados entre los dos grupos de pacientes. Finalmente hemos realizado un análisis de componentes principales para reducir la dimensionalidad de los datos.
+
+    Hemos utilizado el workflow *POMA* de Bioconductor, y las funciones *cor()*, *prcomp()*, además de *pheatmap()* y *ggplot()* para las representaciones gráficas.
+
+\newpage
+
+### Resultados
+
+#### Análisis descriptivo
+
+Antes de empezar a explorar y analizar los datos metabólicos, hemos hecho una descripción de los datos. Veamos la distribución de sujetos en cada uno de los grupos de clasificación de síndrome caquéctico.
+
+```{r, echo=TRUE}
+# Distribución de los sujetos
+table(colData(senorm)$Group)
+```
+
+De los 77 sujetos, 47 padecen el síndrome caquéxico y 30 pertenecen al grupo control.
+
+No tenemos más información sobre los sujetos. Por lo tanto, hemos centrado el resto del análisis descriptivo en los datos metabólicos. Hemos obtenido un resumen estadístico de cada variable y una matriz de correlaciones entre los niveles de metabolitos.
+
+```{r, echo=TRUE, fig.width=10, fig.height=10}
+
+# Calcular estadísticas descriptivas para la matriz de conteos
+counts <- t(assay(senorm))
+
+# Cálculo de estadísticas por columnas (por variable)
+
+apply(counts, 2, function(x) {
+  c(mean = mean(x), 
+    sd = sd(x), 
+    median = median(x), 
+    min = min(x), 
+    max = max(x))
+})
+
+# Calcular la matriz de correlación
+cor_matrix <- cor(counts, method = "pearson")
+
+# Visualizar la matriz de correlación usando pheatmap
+library(pheatmap)
+pheatmap(cor_matrix,
+         color = colorRampPalette(c("white", "skyblue", "navy"))(50),
+         main = "Matriz de Correlación de Variables")
+
+
+```
+
+Claramente, algunos metabolitos correlacionan fuertemente entre sí. Por ejemplo, los metabolitos Fucosa, Piroglutamina, Creatina y Dimetilamina tienen una alta correlación positiva. También observamos que no existen correlaciones negativas entre los metabolitos.
+
+Sin embargo, con este gráfico no podemos saber si los niveles de metabolitos están relacionados o no con tener o no caquexia. Por eso, hemos decidido explorar más los datos con un mapa de color de los contajes de cada uno de los metabolitos medidos en cada uno de los pacientes, indicando a qué grupo pertenece cada paciente.
+
+```{r, echo=TRUE, fig.width=10, fig.height=10}
+
+# Crear la anotación de los grupos desde rowData
+annotation <- data.frame(Group = colData(senorm)$Group)
+rownames(annotation) <- rownames(counts)
+
+# Crear el heatmap con anotación
+pheatmap(counts,
+         annotation_row = annotation,   # Anotación de grupo
+         scale = "column",              
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",      
+         color = colorRampPalette(c("blue", "white", "red"))(50),
+         main = "Niveles de Metabolitos por sujeto")
+
+```
+
+En el heatmap podemos observar que, cuando clusterizamos por metabolitos, existen muestras con diferentes tendencias: los sujetos en las filas superiores tienden a valores más elevados de la mayor parte de los metabolitos, los de las filas intermedias tienden a valores más bajos en todos los metabolitos y los sujetos en las últimas filas tienen patrones mixtos.
+
+Para continuar con el análisis, hemos realizado un Análisis de Componentes Principales mediante la descomposición en valores singulares de la matriz de datos con el objetivo de disminuir la dimensionalidad de los datos y revelar los patrones dominantes y las principales tendencias en los datos.
+
+```{r, echo=TRUE, fig.width=10, fig.height=10}
+
+# Realizar el PCA
+pca <- prcomp((counts), center = TRUE, scale. = FALSE)
+
+# Calcular la varianza explicada
+var_exp <- pca$sdev^2 / sum(pca$sdev^2) * 100
+var_exp
+
+# Graficar la varianza explicada por cada componente principal
+barplot(var_exp[1:10], main = "Varianza Explicada por Componentes Principales", 
+        xlab = "Componente Principal", ylab = "Porcentaje de Varianza Explicada")
+
+loadings <- pca$rotation
+(loadings[, 1:2])
+
+```
+
+La primera Componente Principal explica casi un 60% de los datos, mientras que la segunda un 4.7%. Es decir, las dos primeras componentes principales explican una alta proporción de la varianza explicada de los datos (casi un 65%).
+
+En cuanto a la carga de los metabolitos a cada una de las dos primers Componentes Principales, todos tienen un impacto positivo en PC1, mientras que para PC2, algunos metabolitos influyen de manera negativa.
+
+```{r, echo=TRUE}
+# Gráfico por grupos
+library(ggplot2)
+
+pca_data <- as.data.frame(pca$x)
+pca_data$Group <- annotation$Group
+
+ggplot(pca_data, aes(x = PC1, y = PC2, color = Group)) +
+  geom_point(size = 3) +
+  labs(title = "PCA de Muestras", x = "PC1", y = "PC2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+En la proyección de las muestras en la bidimensión PC1vsPC2, no se ven clústers muy pronunciados, pero sí existe una tendencia a la agrupación entre muestras del mismo grupo. Además, no existen puntos exageradamente alejados del resto.
+
+\newpage
+
+### Discusión, limitaciones y conclusiones
+
+El síndrome caquéctico está relacionado con un deterioro funcional del paciente que caracteriza a muchas patologías entre las que se incluyen el cáncer. El desarrollo de la caquexia engloba alteraciones metabólicas, hormonales y de otros mediadores celulares que desencadenan un síndrome de consunción que no puede resolverse mediante la ingesta forzada de nutrientes.
+
+Hemos explorado los datos disponibles de niveles de 63 metabolitos diferentes tomados a 77 pacientes con cáncer, de los que disponemos la información de si padecen o no síndrome caquéctico. El objetivo del análisis es entender si existen patrones metabólicos que diferencian los pacientes con síndrome caquéxico de los que no lo padecen.
+
+Observando el correlograma, vemos que los niveles de algunos de los metabolitos correlacionan de manera contundente entre sí. Es decir, que cuando los niveles de unos están elevados, los de otros también. Este es el caso de metabolitos como Fucosa, Piroglutamina, Creatina y Dimetilamina.
+
+Al explorar los patrones de niveles de metabolitos entre los pacientes tendiendo en cuenta a qué grupo pertenecen, hemos observado que se podrían agrupar a los sujetos en tres grupos diferentes: los de niveles elevados, los de niveles bajos y los de niveles mixtos. Además, hemos visto que las muestras de pacientes caquécticos se concentran más en la parte superior del gráfico, donde los valores están más elevados. Por lo tanto, de manera preliminar, se intuye que valores más elevados de los metabolitos medidos podrían indicar síndrome caquéctico. Los metabolitos con niveles elevados entre los pacientes con caquexia podrían ser potenciales biomarcadores de dicho síndrome.
+
+Finalmente, al reducir la dimensionalidad con el PCA, hemos visto que dos componentes principales son suficientes para capturar la mayor parte de la variabilidad de los datos, es decir que el conjunto de datos tiene una estructura que puede ser bien representada con menos dimensiones. Las cargas de los dos primeras componentes principales nos muestran que los metabolitos más relacionados (positivamente) con PC1 son el cis-aconitato, la glutamina y la alanina y que ningún metabolito aporta de manera negativa a esta componente. En cuanto a PC2, hay metabolitos relacionados positiva y negativamente y los de más peso son, respectivamente, el succinato y la pi-metil-histidina.\
+En la representación bidimensional de PC1 vs. PC2, se observan dos tendencias diferenciadas en función del grupo de las muestras, lo que podría indicar que sí existen patrones de niveles metabólicos que pueden ayudar a diagnosticar, o predecir, el síndrome caquéctico.
+
+Este estudio presenta varias limitaciones. Para poder caracterizar mejor los patrones metabólicos deberían tenerse en cuenta más datos sobre los pacientes incluídos en el estudio. Por ejemplo, la variedad de patologías: Si bien el estudio se centra en pacientes con cáncer, la heterogeneidad en los tipos de cáncer y en su tratamiento podría influir en los niveles de metabolitos, dificultando la identificación de patrones específicos para el síndrome caquéctico. Tampoco se han tenido en cuenta las condiciones ambientales y dietéticas de los paciente, queafectan a los niveles de metabolitos y la interpretación de los resultados. Finalmente, haría falta un análisis estadístico, multivariado, más profundo de los datos, pues el análisis exploratorio de las correlaciones entre metabolitos no siempre capturan interacciones complejas que podrían ser relevantes para el síndrome caquéctico.
+
+En conclusión, este estudio sugiere que existen patrones metabólicos diferenciadores entre pacientes con y sin síndrome caquéctico en el contexto del cáncer, evidenciados por la correlación entre metabolitos como Fucosa, Piroglutamina, Creatina y Dimetilamina. La clasificación de los pacientes en grupos de niveles elevados, bajos y mixtos, junto con el análisis de componentes principales que identifica metabolitos clave como cis-aconitato y glutamina, indica que un aumento en los metabolitos podría ser un indicador del síndrome caquéctico. Sin embargo, se reconocen limitaciones significativas, como la falta de información respecto a la heterogeneidad en los tipos de cáncer y los factores ambientales y dietéticos, que requieren un análisis más profundo en futuras investigaciones para validar estos hallazgos y su potencial como biomarcadores.
+
+\newpage
+
+### Referencias
+
+FERRIOLS LISART F, TORDERA BAVIERA M. El síndrome caquéctico en el paciente oncológico:fisiopatología, manifestaciones clínicas y tratamientofarmacológico. Farm Hosp. 2003;27(5):308-10.
+
+<https://bioconductor.org/packages/release/bioc/vignettes/SummarizedExperiment/inst/doc/SummarizedExperiment.html>
+
+<https://www.bioconductor.org/packages/release/bioc/vignettes/POMA/inst/doc/POMA-workflow.html#the-poma-workflow>
+
+### Enlace al respositorio de Github
+
+<https://github.com/EFR28/Fuentes_Raventos_Elisa_PEC1.git>
